@@ -89,7 +89,7 @@ void scan_ssids(int *n, char **ssids) {
             scan_in_progress = false;
         }
 
-        if (scan_in_progress) sleep_ms(100);
+        if (scan_in_progress) sleep_ms(10);
     }
 
     *n = scan_results_n;

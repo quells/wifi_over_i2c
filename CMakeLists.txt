@@ -46,6 +46,8 @@ pico_enable_stdio_usb(wifi_over_i2c 1)
 
 # Add the standard library to the build
 target_link_libraries(wifi_over_i2c
+        pico_i2c_slave
+        hardware_i2c
         pico_stdlib)
 
 # Add the standard include files to the build
