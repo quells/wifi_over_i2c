@@ -37,9 +37,13 @@ int main() {
     // Example to turn on the Pico W LED
     // cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
+    cyw43_arch_enable_sta_mode();
     int ssid_count = 0;
     char *ssids_found = NULL;
     scan_ssids(&ssid_count, &ssids_found);
+    cyw43_arch_disable_sta_mode();
+    cyw43_arch_deinit();
+
     printf("%d\n", ssid_count);
     char ssid[SSID_WIDTH+1] = {};
     for (int i = 0; i < SSID_WIDTH+1; i++) ssid[i] = 0;
