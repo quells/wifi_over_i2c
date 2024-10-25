@@ -60,6 +60,7 @@ static int scan_result(void *env, const cyw43_ev_scan_result_t *result) {
 }
 
 void scan_ssids(int *n, char **ssids) {
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
     scan_results_n = 0;
     for (int i = 0; i < SSID_WIDTH * SSID_COUNT_MAX; i++) scan_results_ssid[i] = 0;
@@ -68,7 +69,7 @@ void scan_ssids(int *n, char **ssids) {
     int err = cyw43_wifi_scan(&cyw43_state, &scan_options, NULL, scan_result);
     if (err) {
         printf("Failed to start wifi scan\n");
-        cyw43_arch_deinit();
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
         return;
     }
 
@@ -93,4 +94,5 @@ void scan_ssids(int *n, char **ssids) {
 
     *n = scan_results_n;
     *ssids = scan_results_ssid;
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
 }
