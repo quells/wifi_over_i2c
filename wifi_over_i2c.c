@@ -15,41 +15,83 @@
 #define I2C_SDA 8
 #define I2C_SCL 9
 #define I2C_BAUDRATE 400*1000
-#define I2C_ADDRESS 0x41
+#define I2C_ADDRESS 0x57
+#define I2C_CHIP_ID 0x46
 
-uint8_t i2c_reg = 0;
+#define I2C_RX_SIZE 4096
+#define I2C_TX_SIZE 65536
+
+uint8_t i2c_op = 0;
 uint8_t i2c_flags = 0;
-uint8_t i2c_buf_idx = 0;
-uint8_t i2c_buf[256] = {};
 bool i2c_busy = false;
-bool i2c_reset = false;
+bool i2c_op_written = false;
+
+int i2c_rx_buf_idx = 0;
+uint8_t i2c_rx_buf[I2C_RX_SIZE] = {};
+
+int i2c_tx_buf_sent = 0;
+int i2c_tx_buf_idx = 0;
+uint8_t i2c_tx_buf[I2C_TX_SIZE] = {};
+
+typedef enum _opcode {
+    OP_PING = 0x12,
+    OP_CHIP_ID = 0x1D,
+} opcode;
 
 void i2c_handler(i2c_inst_t *i2c, i2c_slave_event_t event) {
     switch (event) {
     case I2C_SLAVE_RECEIVE: {
-        uint8_t x = i2c_read_byte_raw(i2c0);
-        if (i2c_buf_idx < 256) i2c_buf[i2c_buf_idx++] = 'r';
-        if (i2c_buf_idx < 256) i2c_buf[i2c_buf_idx++] = x;
+        uint8_t r = i2c_read_byte_raw(i2c0);
+        if (i2c_busy) return;
+        if (!i2c_op_written) {
+            i2c_op = r;
+            switch (i2c_op) {
+            case OP_PING:
+                i2c_busy = true;
+                break;
+            default:
+                break;
+            }
+            i2c_op_written = true;
+        } else {
+            if (i2c_rx_buf_idx >= I2C_RX_SIZE) return;
+            i2c_rx_buf[i2c_rx_buf_idx++] = r;
+        }
         break;
     }
     case I2C_SLAVE_REQUEST: {
-        i2c_write_byte_raw(i2c0, 0xFF);
-        if (i2c_buf_idx < 256) i2c_buf[i2c_buf_idx++] = 'w';
+        uint8_t w = 0xFF;
+        if (!i2c_busy) {
+            switch (i2c_op) {
+            case OP_CHIP_ID: {
+                w = I2C_CHIP_ID;
+                break;
+            }
+            default: {
+                if (i2c_tx_buf_sent < i2c_tx_buf_idx) w = i2c_tx_buf[i2c_tx_buf_sent++];
+                break;
+            }
+            }
+        }
+        i2c_write_byte_raw(i2c0, w);
         break;
     }
     case I2C_SLAVE_FINISH: {
-        if (i2c_buf_idx < 256) i2c_buf[i2c_buf_idx++] = 'c';
-        i2c_reset = true;
+        i2c_op_written = false;
         break;
     }
     default: break;
     }
 }
 
+void i2c_tx_msg(char *msg) {
+    strncpy(i2c_tx_buf, msg, I2C_TX_SIZE);
+    i2c_tx_buf_sent = 0;
+    i2c_tx_buf_idx = strnlen(msg, I2C_TX_SIZE);
+}
+
 int main() {
     stdio_init_all();
-
-    sleep_ms(2000);
 
     // Initialise the Wi-Fi chip
     if (cyw43_arch_init_with_country(CYW43_COUNTRY_USA)) {
@@ -57,7 +99,6 @@ int main() {
         return -1;
     }
 
-    // I2C Initialisation. Using it at 400Khz.
     gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
     gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
     gpio_pull_up(I2C_SDA);
@@ -65,38 +106,40 @@ int main() {
     i2c_init(I2C_PORT, I2C_BAUDRATE);
     i2c_slave_init(i2c0, I2C_ADDRESS, &i2c_handler);
 
-    // For more examples of I2C use see https://github.com/raspberrypi/pico-examples/tree/master/i2c
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+    sleep_ms(150);
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
 
-    // Example to turn on the Pico W LED
-    // cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+    // cyw43_arch_enable_sta_mode();
+    // int ssid_count = 0;
+    // char *ssids_found = NULL;
+    // scan_ssids(&ssid_count, &ssids_found);
+    // cyw43_arch_disable_sta_mode();
+    // cyw43_arch_deinit();
 
-    cyw43_arch_enable_sta_mode();
-    int ssid_count = 0;
-    char *ssids_found = NULL;
-    scan_ssids(&ssid_count, &ssids_found);
-    cyw43_arch_disable_sta_mode();
-    cyw43_arch_deinit();
-
-    printf("%d\n", ssid_count);
-    char ssid[SSID_WIDTH+1] = {};
-    for (int i = 0; i < SSID_WIDTH+1; i++) ssid[i] = 0;
-    for (int i = 0; i < ssid_count; i++) {
-        strncpy(ssid, ssids_found + SSID_WIDTH*sizeof(char)*i, SSID_WIDTH);
-        printf("%s\n", ssid);
-    }
-    printf("---\n");
+    // printf("%d\n", ssid_count);
+    // char ssid[SSID_WIDTH+1] = {};
+    // for (int i = 0; i < SSID_WIDTH+1; i++) ssid[i] = 0;
+    // for (int i = 0; i < ssid_count; i++) {
+    //     strncpy(ssid, ssids_found + SSID_WIDTH*sizeof(char)*i, SSID_WIDTH);
+    //     printf("%s\n", ssid);
+    // }
+    // printf("---\n");
 
     while (true) {
-        if (i2c_reset) {
-            uint8_t buf[256] = {};
-            memcpy(buf, i2c_buf, i2c_buf_idx);
-            for (int i = 0; i < i2c_buf_idx; i++) {
-                printf("%02x ", buf[i]);
-                if (i % 16 == 0) printf("\n");
+        if (i2c_busy) {
+            switch (i2c_op) {
+            case OP_PING: {
+                i2c_tx_msg("PONG");
+                break;
             }
-            i2c_reset = false;
+            default:
+                break;
+            }
+
+            i2c_busy = false;
         }
-        sleep_ms(10);
+        sleep_us(100);
     }
     return 0;
 }
