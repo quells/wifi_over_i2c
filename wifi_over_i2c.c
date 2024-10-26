@@ -34,8 +34,8 @@ int i2c_tx_buf_idx = 0;
 uint8_t i2c_tx_buf[I2C_TX_SIZE] = {};
 
 typedef enum _opcode {
-    OP_PING = 0x12,
     OP_CHIP_ID = 0x1D,
+    OP_PING = 0x50,
 } opcode;
 
 void i2c_handler(i2c_inst_t *i2c, i2c_slave_event_t event) {
