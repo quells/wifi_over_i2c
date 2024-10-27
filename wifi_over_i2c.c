@@ -38,11 +38,11 @@ uint8_t i2c_tx_buf[I2C_TX_SIZE] = {};
 // but anything with the wireless chip seems fragile.
 typedef enum _opcode {
     OP_CHIP_ID = 0x1D,
-    OP_DISABLE = 0x44, // 1000ms
-    OP_ENABLE  = 0x45, // 1000ms
+    OP_DISABLE = 0x44, // 200ms
+    OP_ENABLE  = 0x45, // 200ms
     OP_FLAGS   = 0x46,
     OP_PING    = 0x50, // 3ms
-    OP_SCAN    = 0x53, // 2000ms
+    OP_SCAN    = 0x53, // 1000ms
 } opcode;
 
 void i2c_handler(i2c_inst_t *i2c, i2c_slave_event_t event) {
