@@ -21,6 +21,13 @@
 #define I2C_RX_SIZE 4096
 #define I2C_TX_SIZE 65536
 
+/*
+  I2C Flags
+  0: STA Mode Enabled
+  1: RX Buffer Full (TODO)
+  2: TX Buffer Full (TODO)
+*/
+
 uint8_t i2c_op = 0;
 uint8_t i2c_flags = 0;
 bool i2c_busy = false;
