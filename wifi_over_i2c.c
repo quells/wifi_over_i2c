@@ -33,9 +33,16 @@ int i2c_tx_buf_sent = 0;
 int i2c_tx_buf_idx = 0;
 uint8_t i2c_tx_buf[I2C_TX_SIZE] = {};
 
+// Conservative client-side delays.
+// Writing to the TX buffer can be interrupted,
+// but anything with the wireless chip seems fragile.
 typedef enum _opcode {
     OP_CHIP_ID = 0x1D,
-    OP_PING = 0x50,
+    OP_DISABLE = 0x44, // 1000ms
+    OP_ENABLE  = 0x45, // 1000ms
+    OP_FLAGS   = 0x46,
+    OP_PING    = 0x50, // 3ms
+    OP_SCAN    = 0x53, // 2000ms
 } opcode;
 
 void i2c_handler(i2c_inst_t *i2c, i2c_slave_event_t event) {
@@ -46,7 +53,10 @@ void i2c_handler(i2c_inst_t *i2c, i2c_slave_event_t event) {
         if (!i2c_op_written) {
             i2c_op = r;
             switch (i2c_op) {
+            case OP_DISABLE:
+            case OP_ENABLE:
             case OP_PING:
+            case OP_SCAN:
                 i2c_busy = true;
                 break;
             default:
@@ -63,14 +73,15 @@ void i2c_handler(i2c_inst_t *i2c, i2c_slave_event_t event) {
         uint8_t w = 0xFF;
         if (!i2c_busy) {
             switch (i2c_op) {
-            case OP_CHIP_ID: {
+            case OP_CHIP_ID:
                 w = I2C_CHIP_ID;
                 break;
-            }
-            default: {
+            case OP_FLAGS:
+                w = i2c_flags;
+                break;
+            default:
                 if (i2c_tx_buf_sent < i2c_tx_buf_idx) w = i2c_tx_buf[i2c_tx_buf_sent++];
                 break;
-            }
             }
         }
         i2c_write_byte_raw(i2c0, w);
@@ -110,29 +121,34 @@ int main() {
     sleep_ms(150);
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
 
-    // cyw43_arch_enable_sta_mode();
-    // int ssid_count = 0;
-    // char *ssids_found = NULL;
-    // scan_ssids(&ssid_count, &ssids_found);
-    // cyw43_arch_disable_sta_mode();
-    // cyw43_arch_deinit();
-
-    // printf("%d\n", ssid_count);
-    // char ssid[SSID_WIDTH+1] = {};
-    // for (int i = 0; i < SSID_WIDTH+1; i++) ssid[i] = 0;
-    // for (int i = 0; i < ssid_count; i++) {
-    //     strncpy(ssid, ssids_found + SSID_WIDTH*sizeof(char)*i, SSID_WIDTH);
-    //     printf("%s\n", ssid);
-    // }
-    // printf("---\n");
+    int ssid_count = 0;
+    char *ssids_found = NULL;
 
     while (true) {
         if (i2c_busy) {
             switch (i2c_op) {
-            case OP_PING: {
+            case OP_DISABLE:
+                cyw43_arch_disable_sta_mode();
+                i2c_tx_msg("KO");
+                i2c_flags &= ~(1);
+                break;
+            case OP_ENABLE:
+                cyw43_arch_enable_sta_mode();
+                i2c_tx_msg("OK");
+                i2c_flags |= 1;
+                break;
+            case OP_PING:
                 i2c_tx_msg("PONG");
                 break;
-            }
+            case OP_SCAN:
+                ssid_count = 0;
+                ssids_found = NULL;
+                scan_ssids(&ssid_count, &ssids_found);
+                i2c_tx_buf[0] = (uint8_t)ssid_count;
+                memcpy(i2c_tx_buf+1, ssids_found, SSID_WIDTH*ssid_count);
+                i2c_tx_buf_sent = 0;
+                i2c_tx_buf_idx = 1 + SSID_WIDTH*ssid_count;
+                break;
             default:
                 break;
             }
